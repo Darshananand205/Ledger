@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Statistics · Ledger{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Statistics</h1>
+  <p class="lede">See where your money went over the last six months, and how each month compared with your budget.</p>
+</div>
+
+<div class="grid-main">
+  <section class="panel">
+    <div class="panel-head"><h2>Income and expenses</h2><span class="aside">Last 6 months</span></div>
+    <div class="chart-box">
+      <canvas id="monthlyBarChart"
+              data-labels='{{ month_labels|tojson }}'
+              data-income='{{ month_income|tojson }}'
+              data-expenses='{{ month_expenses|tojson }}'></canvas>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Spending by category</h2><span class="aside">This month</span></div>
+    {% if category_labels %}
+      <div class="chart-box">
+        <canvas id="categoryPieChart"
+                data-labels='{{ category_labels|tojson }}'
+                data-values='{{ category_values|tojson }}'></canvas>
+      </div>
+    {% else %}
+      <p class="aside">No expenses recorded this month yet. Add one from the dashboard and it will show up here.</p>
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid-2">
+  <section class="panel">
+    <div class="panel-head"><h2>Previous months</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Month</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Net</th></tr>
+        </thead>
+        <tbody>
+          {% for m in monthly_summary %}
+            <tr>
+              <td>{{ m.label }}</td>
+              <td class="num in">${{ '{:,.2f}'.format(m.income) }}</td>
+              <td class="num out">${{ '{:,.2f}'.format(m.expenses) }}</td>
+              <td class="num {% if m.net < 0 %}out{% else %}in{% endif %}">${{ '{:,.2f}'.format(m.net) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Budget history</h2></div>
+    {% if current_budget %}
+      <p class="aside">
+        Current: {{ current_budget.period|capitalize }} budget of ${{ '{:,.2f}'.format(current_budget.total) }}
+        ({{ current_budget.start.strftime('%d %b') }} to {{ current_budget.end.strftime('%d %b') }}),
+        with ${{ '{:,.2f}'.format(current_budget.spent) }} spent so far.
+      </p>
+    {% endif %}
+
+    {% if budget_history %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Period</th><th>Dates</th><th class="num">Budget</th><th class="num">Spent</th></tr>
+          </thead>
+          <tbody>
+            {% for b in budget_history %}
+              <tr>
+                <td>{{ b.period|capitalize }}</td>
+                <td>{{ b.start.strftime('%d %b') }} to {{ b.end.strftime('%d %b %Y') }}</td>
+                <td class="num">${{ '{:,.2f}'.format(b.total) }}</td>
+                <td class="num {% if b.over %}out{% endif %}">${{ '{:,.2f}'.format(b.spent) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="aside">Past budgets appear here once you replace one with a new budget.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+  const css = getComputedStyle(document.documentElement);
+  const token = (name) => css.getPropertyValue(name).trim();
+  const money = (n) => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  Chart.defaults.font.family = token("--font");
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = token("--muted");
+  Chart.defaults.borderColor = token("--line");
+
+  const barCtx = document.getElementById("monthlyBarChart");
+  if (barCtx) {
+    new Chart(barCtx, {
+      type: "bar",
+      data: {
+        labels: JSON.parse(barCtx.dataset.labels),
+        datasets: [
+          { label: "Income", data: JSON.parse(barCtx.dataset.income), backgroundColor: token("--in"), borderRadius: 6, maxBarThickness: 26 },
+          { label: "Expenses", data: JSON.parse(barCtx.dataset.expenses), backgroundColor: token("--out"), borderRadius: 6, maxBarThickness: 26 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "top", align: "end", labels: { usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
+          tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ": " + money(ctx.parsed.y) } },
+        },
+        scales: {
+          x: { grid: { display: false }, border: { display: false } },
+          y: { beginAtZero: true, border: { display: false }, ticks: { callback: (v) => "$" + v.toLocaleString("en-US") } },
+        },
+      },
+    });
+  }
+
+  const pieCtx = document.getElementById("categoryPieChart");
+  if (pieCtx) {
+    new Chart(pieCtx, {
+      type: "pie",
+      data: {
+        labels: JSON.parse(pieCtx.dataset.labels),
+        datasets: [{
+          data: JSON.parse(pieCtx.dataset.values),
+          backgroundColor: ["#3f51e8", "#0f9d76", "#f2a93b", "#e2574c", "#8b5cf6", "#0ea5e9", "#ec7fb0", "#94a3b8"],
+          borderColor: token("--surface"),
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 14 } },
+          tooltip: { callbacks: { label: (ctx) => ctx.label + ": " + money(ctx.parsed) } },
+        },
+      },
+    });
+  }
+</script>
+{% endblock %}

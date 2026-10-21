@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Ledger{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% set ep = request.endpoint %}
+  <header class="bar">
+    <div class="bar-inner">
+      <a class="wordmark" href="{{ url_for('home') }}">
+        <span class="wordmark-mark" aria-hidden="true">L</span>Ledger
+      </a>
+
+      {% if current_user_name %}
+        <nav class="nav" aria-label="Main">
+          <a href="{{ url_for('dashboard') }}" {% if ep == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+          <a href="{{ url_for('budget_page') }}" {% if ep == 'budget_page' %}aria-current="page"{% endif %}>Budget</a>
+          <a href="{{ url_for('statistics') }}" {% if ep == 'statistics' %}aria-current="page"{% endif %}>Statistics</a>
+          <a href="{{ url_for('loan_calculator') }}" {% if ep == 'loan_calculator' %}aria-current="page"{% endif %}>Loan calculator</a>
+        </nav>
+
+        <div class="bar-user">
+          <span class="avatar" aria-hidden="true">{{ current_user_name[:1]|upper }}</span>
+          <span class="who">{{ current_user_name }}</span>
+          <form method="post" action="{{ url_for('logout') }}">
+            <button class="btn-secondary btn-sm" type="submit">Log out</button>
+          </form>
+        </div>
+      {% endif %}
+    </div>
+  </header>
+
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="notices">
+          {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

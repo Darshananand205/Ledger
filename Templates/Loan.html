@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Loan calculator · Ledger{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Loan calculator</h1>
+  <p class="lede">Work out your monthly payment (EMI), the total interest you'll pay, and the full repayment schedule.</p>
+</div>
+
+<div class="grid-main">
+  <section class="panel">
+    <div class="panel-head"><h2>Loan details</h2></div>
+    <form class="stack" onsubmit="return false;">
+      <label>
+        Loan amount ($)
+        <input type="number" id="principal" step="0.01" min="0" value="500000">
+      </label>
+      <label>
+        Annual interest rate (%)
+        <input type="number" id="rate" step="0.01" min="0" value="9">
+      </label>
+      <label>
+        Tenure
+        <div class="input-group">
+          <input type="number" id="tenure" step="1" min="1" value="5">
+          <select id="tenure-unit" aria-label="Tenure unit">
+            <option value="years">Years</option>
+            <option value="months">Months</option>
+          </select>
+        </div>
+      </label>
+    </form>
+  </section>
+
+  <section class="hero compact">
+    <p class="hero-label">Monthly payment (EMI)</p>
+    <p class="hero-figure" id="emi-figure">$0.00</p>
+
+    <div class="flow-bar" id="split-bar" role="img" aria-label="Share of total payment that is principal compared with interest">
+      <span></span>
+    </div>
+    <div class="legend">
+      <span><i class="dot-in"></i>Principal <b id="share-principal">0%</b></span>
+      <span><i class="dot-out"></i>Interest <b id="share-interest">0%</b></span>
+    </div>
+
+    <dl class="hero-stats stacked">
+      <div class="hero-stat">
+        <dt>Principal</dt>
+        <dd id="out-principal">$0.00</dd>
+      </div>
+      <div class="hero-stat">
+        <dt>Total interest</dt>
+        <dd class="out" id="out-interest">$0.00</dd>
+      </div>
+      <div class="hero-stat">
+        <dt>Total payment</dt>
+        <dd id="out-total">$0.00</dd>
+      </div>
+    </dl>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Repayment schedule</h2>
+    <span class="aside">How each payment splits between interest and principal</span>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th class="num">EMI</th>
+          <th class="num">Interest</th>
+          <th class="num">Principal</th>
+          <th class="num">Balance</th>
+        </tr>
+      </thead>
+      <tbody id="schedule-body"></tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const dollar = (n) =>
+    "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function showResults(emi, principal, interest, total) {
+    document.getElementById("emi-figure").textContent = dollar(emi);
+    document.getElementById("out-principal").textContent = dollar(principal);
+    document.getElementById("out-interest").textContent = dollar(interest);
+    document.getElementById("out-total").textContent = dollar(total);
+
+    const principalShare = total > 0 ? (principal / total) * 100 : 0;
+    const interestShare = total > 0 ? 100 - principalShare : 0;
+    document.getElementById("split-bar").style.setProperty("--share", principalShare.toFixed(1) + "%");
+    document.getElementById("share-principal").textContent = principalShare.toFixed(0) + "%";
+    document.getElementById("share-interest").textContent = interestShare.toFixed(0) + "%";
+  }
+
+  function calculate() {
+    const principal = parseFloat(document.getElementById("principal").value) || 0;
+    const annualRate = parseFloat(document.getElementById("rate").value) || 0;
+    const tenureValue = parseFloat(document.getElementById("tenure").value) || 0;
+    const tenureUnit = document.getElementById("tenure-unit").value;
+
+    const months = Math.round(tenureUnit === "years" ? tenureValue * 12 : tenureValue);
+    const monthlyRate = annualRate / 12 / 100;
+
+    if (principal <= 0 || months <= 0) {
+      showResults(0, 0, 0, 0);
+      document.getElementById("schedule-body").innerHTML = "";
+      return;
+    }
+
+    let emi;
+    if (monthlyRate === 0) {
+      emi = principal / months;
+    } else {
+      const factor = Math.pow(1 + monthlyRate, months);
+      emi = (principal * monthlyRate * factor) / (factor - 1);
+    }
+
+    const totalPayment = emi * months;
+    const totalInterest = totalPayment - principal;
+    showResults(emi, principal, totalInterest, totalPayment);
+
+    // Capped at 360 rows (30 years) so an oversized tenure can't flood the page.
+    let balance = principal;
+    const rows = [];
+    const rowCount = Math.min(months, 360);
+    for (let m = 1; m <= rowCount; m++) {
+      const interestPortion = balance * monthlyRate;
+      let principalPortion = emi - interestPortion;
+      if (m === months) principalPortion = balance;
+      balance = Math.max(balance - principalPortion, 0);
+
+      rows.push(
+        `<tr><td>${m}</td>` +
+        `<td class="num">${dollar(emi)}</td>` +
+        `<td class="num out">${dollar(interestPortion)}</td>` +
+        `<td class="num in">${dollar(principalPortion)}</td>` +
+        `<td class="num">${dollar(balance)}</td></tr>`
+      );
+    }
+    document.getElementById("schedule-body").innerHTML = rows.join("");
+  }
+
+  ["principal", "rate", "tenure", "tenure-unit"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", calculate);
+  });
+  calculate();
+</script>
+{% endblock %}

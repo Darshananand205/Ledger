@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Ledger{% endblock %}
+
+{% block content %}
+{% if budget %}
+  {% if budget.over %}
+    <div class="banner banner-danger">
+      <span>You've gone ${{ '{:,.2f}'.format(budget.spent - budget.total) }} over your {{ budget.period }} budget.</span>
+      <a href="{{ url_for('budget_page') }}">View budget</a>
+    </div>
+  {% elif budget.warning %}
+    <div class="banner banner-warn">
+      <span>You're at {{ '%.0f'|format(budget.percent) }}% of your {{ budget.period }} budget, with ${{ '{:,.2f}'.format(budget.total - budget.spent) }} left.</span>
+      <a href="{{ url_for('budget_page') }}">View budget</a>
+    </div>
+  {% endif %}
+  {% for cat in budget.categories %}
+    {% if cat.over %}
+      <div class="banner banner-danger">
+        <span>{{ cat.category }} is ${{ '{:,.2f}'.format(cat.spent - cat.limit) }} over its limit this period.</span>
+        <a href="{{ url_for('budget_page') }}">View budget</a>
+      </div>
+    {% elif cat.warning %}
+      <div class="banner banner-warn">
+        <span>{{ cat.category }} is at {{ '%.0f'|format(cat.percent) }}% of its ${{ '{:,.2f}'.format(cat.limit) }} limit this period.</span>
+        <a href="{{ url_for('budget_page') }}">View budget</a>
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% set flow = total_income + total_expenses %}
+{% set in_share = (total_income / flow * 100)|float if flow else 0 %}
+
+<section class="hero">
+  <p class="hero-label">Total balance</p>
+  <p class="hero-figure {% if balance < 0 %}negative{% endif %}">${{ '{:,.2f}'.format(balance) }}</p>
+  <p class="hero-note">Your starting balance, plus everything you've earned, minus everything you've spent.</p>
+
+  <div class="flow-bar {% if not flow %}empty{% endif %}" role="img" aria-label="Money in compared with money out">
+    <span style="--share: {{ '%.1f'|format(in_share) }}%"></span>
+  </div>
+
+  <dl class="hero-stats">
+    <div class="hero-stat">
+      <dt>Starting balance</dt>
+      <dd>${{ '{:,.2f}'.format(opening_balance) }}</dd>
+    </div>
+    <div class="hero-stat">
+      <dt>Money in</dt>
+      <dd class="in">${{ '{:,.2f}'.format(total_income) }}</dd>
+    </div>
+    <div class="hero-stat">
+      <dt>Money out</dt>
+      <dd class="out">${{ '{:,.2f}'.format(total_expenses) }}</dd>
+    </div>
+  </dl>
+</section>
+
+<div class="grid-main">
+  <section class="panel">
+    <div class="panel-head"><h2>Add an entry</h2></div>
+
+    <form method="post" action="{{ url_for('add_transaction') }}" class="form-grid two">
+      <label>
+        Type
+        <select name="type" id="txn-type" onchange="filterCategories()">
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
+      </label>
+
+      <label>
+        Amount
+        <input type="number" name="amount" step="0.01" min="0.01" placeholder="0.00" required>
+      </label>
+
+      <label>
+        Category
+        <select name="category" id="txn-category"
+                data-expense='{{ expense_categories|tojson }}'
+                data-income='{{ income_categories|tojson }}'>
+          {% for category in expense_categories %}
+            <option value="{{ category }}">{{ category }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>
+        Date
+        <input type="date" name="txn_date" value="{{ today }}">
+      </label>
+
+      <label class="span-full">
+        Note
+        <input type="text" name="note" maxlength="255" placeholder="Optional">
+      </label>
+
+      <div class="span-full actions">
+        <button type="submit">Add entry</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Starting balance</h2></div>
+    <p class="aside">Cash or bank balance you had before you started tracking here. It's included in your total.</p>
+
+    <form method="post" action="{{ url_for('set_opening_balance') }}" class="stack">
+      <label>
+        Amount
+        <input type="number" name="opening_balance" step="0.01" value="{{ opening_balance }}" required>
+      </label>
+      <button type="submit">Save starting balance</button>
+    </form>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>Recent entries</h2></div>
+
+  {% if transactions %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Category</th><th>Note</th>
+            <th class="num">Amount</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for txn in transactions %}
+            <tr>
+              <td>{{ txn.txn_date.strftime('%d %b %Y') }}</td>
+              <td><span class="chip">{{ txn.category }}</span></td>
+              <td class="muted">{{ txn.note or '—' }}</td>
+              <td class="num {{ 'in' if txn.type == 'income' else 'out' }}">
+                {{ '+' if txn.type == 'income' else '−' }}${{ '{:,.2f}'.format(txn.amount) }}
+              </td>
+              <td class="action">
+                <form method="post" action="{{ url_for('delete_transaction', txn_id=txn.id) }}">
+                  <button class="link-button danger" type="submit">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="aside">No entries yet. Add your first income or expense above.</p>
+  {% endif %}
+</section>
+
+<section class="panel danger">
+  <div class="panel-head"><h2>Reset transactions</h2></div>
+  <p class="reset-text">Permanently deletes every income and expense entry. Your account and starting balance stay as they are.</p>
+
+  <form method="post" action="{{ url_for('reset_transactions') }}" class="form-inline"
+        onsubmit="return confirm('Delete all transactions? This cannot be undone.');">
+    <label>
+      Type RESET to confirm
+      <input type="text" name="confirm" placeholder="RESET" autocomplete="off" required>
+    </label>
+    <button type="submit" class="danger-button">Delete all transactions</button>
+  </form>
+</section>
+
+<script>
+  function filterCategories() {
+    const type = document.getElementById("txn-type").value;
+    const select = document.getElementById("txn-category");
+    const options = JSON.parse(select.dataset[type]);
+    select.innerHTML = "";
+    options.forEach(function (category) {
+      const opt = document.createElement("option");
+      opt.value = category;
+      opt.textContent = category;
+      select.appendChild(opt);
+    });
+  }
+</script>
+{% endblock %}

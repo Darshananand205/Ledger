@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Create account · Ledger{% endblock %}
+
+{% block content %}
+<div class="auth">
+  <section class="panel auth-card">
+    <h1>Create your account</h1>
+    <p class="lede">Track your income and spending, and stay inside a budget.</p>
+
+    <form method="post" class="stack">
+      <label>
+        Name
+        <input type="text" name="name" value="{{ name }}" required autofocus>
+      </label>
+
+      <label>
+        Email
+        <input type="email" name="email" value="{{ email }}" required>
+      </label>
+
+      <label>
+        Password
+        <input type="password" name="password" minlength="8" required>
+        <small>At least 8 characters.</small>
+      </label>
+
+      <button class="btn-block" type="submit">Create account</button>
+    </form>
+
+    <p class="auth-foot">Already registered? <a href="{{ url_for('login') }}">Log in</a></p>
+  </section>
+</div>
+{% endblock %}

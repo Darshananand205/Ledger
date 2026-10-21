@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Budget · Ledger{% endblock %}
+
+{% block content %}
+{% if budget %}
+  {% if budget.over %}
+    <div class="banner banner-danger">
+      <span>You've gone ${{ '{:,.2f}'.format(budget.spent - budget.total) }} over your {{ budget.period }} budget.</span>
+    </div>
+  {% elif budget.warning %}
+    <div class="banner banner-warn">
+      <span>You're at {{ '%.0f'|format(budget.percent) }}% of your {{ budget.period }} budget, with ${{ '{:,.2f}'.format(budget.total - budget.spent) }} left.</span>
+    </div>
+  {% endif %}
+  {% for cat in budget.categories %}
+    {% if cat.over %}
+      <div class="banner banner-danger">
+        <span>{{ cat.category }} is ${{ '{:,.2f}'.format(cat.spent - cat.limit) }} over its limit this period.</span>
+      </div>
+    {% elif cat.warning %}
+      <div class="banner banner-warn">
+        <span>{{ cat.category }} is at {{ '%.0f'|format(cat.percent) }}% of its ${{ '{:,.2f}'.format(cat.limit) }} limit this period.</span>
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+<div class="page-head">
+  <h1>Budget</h1>
+  <p class="lede">Set a spending target for the week or month, then cap individual categories inside it.</p>
+</div>
+
+{% if budget %}
+  <div class="grid-main">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>{{ budget.period|capitalize }} budget</h2>
+        <span class="aside">{{ budget.start.strftime('%d %b') }} to {{ budget.end.strftime('%d %b') }}</span>
+      </div>
+
+      <p class="meter-figure">${{ '{:,.2f}'.format(budget.spent) }} <span>of ${{ '{:,.2f}'.format(budget.total) }}</span></p>
+      <div class="progress">
+        <div class="progress-bar {% if budget.over %}over{% elif budget.warning %}warn{% endif %}"
+             style="--fill: {{ budget.percent }}%"></div>
+      </div>
+      <div class="meter-meta">
+        <span>{{ '%.0f'|format((budget.spent / budget.total * 100)|float) }}% used</span>
+        <span>
+          {% if budget.over %}${{ '{:,.2f}'.format(budget.spent - budget.total) }} over
+          {% else %}${{ '{:,.2f}'.format(budget.total - budget.spent) }} left{% endif %}
+        </span>
+      </div>
+
+      <hr class="divider">
+
+      <div class="panel-head"><h2>Category limits</h2></div>
+      {% if budget.categories %}
+        <ul class="limit-list">
+          {% for cat in budget.categories %}
+            <li>
+              <div class="limit-head">
+                <span>{{ cat.category }}</span>
+                <span class="amounts {% if cat.over %}out{% endif %}">
+                  ${{ '{:,.2f}'.format(cat.spent) }} of ${{ '{:,.2f}'.format(cat.limit) }}
+                </span>
+              </div>
+              <div class="progress thin">
+                <div class="progress-bar {% if cat.over %}over{% elif cat.warning %}warn{% endif %}"
+                     style="--fill: {{ cat.percent }}%"></div>
+              </div>
+              <div class="limit-foot">
+                <form method="post" action="{{ url_for('delete_budget_category', category=cat.category) }}">
+                  <button class="link-button danger" type="submit">Remove limit</button>
+                </form>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="aside">No category limits yet. Add one to cap spending on something like Food or Rent.</p>
+      {% endif %}
+    </section>
+
+    <div class="stack-gap">
+      <section class="panel">
+        <div class="panel-head"><h2>Add a category limit</h2></div>
+        <form method="post" action="{{ url_for('set_budget_category') }}" class="stack">
+          <label>
+            Category
+            <select name="category">
+              {% for category in expense_categories %}
+                <option value="{{ category }}">{{ category }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Limit for this period
+            <input type="number" name="limit_amount" step="0.01" min="0.01" placeholder="0.00" required>
+          </label>
+          <button type="submit">Save limit</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2>Remove budget</h2></div>
+        <p class="aside">Stops tracking this period. Your category limits are kept for the next budget you set.</p>
+        <form method="post" action="{{ url_for('delete_budget') }}">
+          <button type="submit" class="btn-secondary">Remove budget</button>
+        </form>
+      </section>
+    </div>
+  </div>
+{% else %}
+  <section class="panel narrow">
+    <div class="panel-head"><h2>Set a budget</h2></div>
+    <p class="aside">Pick how often it resets and how much you want to spend in that time.</p>
+
+    <form method="post" action="{{ url_for('set_budget') }}" class="form-grid two">
+      <label>
+        Period
+        <select name="period">
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </label>
+      <label>
+        Amount
+        <input type="number" name="total_amount" step="0.01" min="0.01" placeholder="0.00" required>
+      </label>
+      <div class="span-full actions">
+        <button type="submit">Set budget</button>
+      </div>
+    </form>
+  </section>
+{% endif %}
+{% endblock %}
